@@ -1,11 +1,14 @@
-var async   = require('async'),
-    zlib    = require('zlib'),
-    AWS     = require('aws-sdk'),
-    setup   = require('./setup.js');
+const { promisify } = require('util');
+const zlib = require('zlib');
+const { S3Client, GetBucketLocationCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const setup = require('./setup.js');
 
-exports.handler = function(args, context) {
+const gunzip = promisify(zlib.gunzip);
+const gzip = promisify(zlib.gzip);
+
+exports.handler = async function(args, context) {
     "use strict";
-    var callback = function(err, result) {
+    const callback = function(err, result) {
         if (err) {
             console.log("'" + args.operation + "' failed. Error: " + JSON.stringify(err));
             return context.fail(JSON.stringify(err));
@@ -26,155 +29,137 @@ exports.handler = function(args, context) {
     }
 };
 
-function handleProcessLogs(args, resultCallback) {
+async function handleProcessLogs(args, resultCallback) {
     "use strict";
-    var s3 = new AWS.S3({'signatureVersion': 'v4'});
-    async.waterfall([
-        function setupS3endpoint(callback) {
-            s3.getBucketLocation({"Bucket": args.s3BucketName}, function(err, data) {
-                if (err) {
-                    console.log("Failed to get '" + args.s3BucketName + "' bucket location. " +
-                                "Error: " + JSON.stringify(err));
-                    return callback(err);
-                }
-                s3.endpoint = getS3Endpoint(data.LocationConstraint);
-                console.log("Using '" + s3.endpoint + "' endpoint");
-                return callback();
-            }); 
-        },
-        function (callback) {
-            processLogs(args, s3, callback);
-        }
-        ],
-        function done(err) {
-            resultCallback(err);
-        }
-    );
+    const s3Client = new S3Client({ region: args.awsRegion });
+    try {
+        const data = await s3Client.send(new GetBucketLocationCommand({ Bucket: args.s3BucketName }));
+        const endpoint = getS3Endpoint(data.LocationConstraint || args.awsRegion);
+        s3Client.config.endpoint = `https://${endpoint}`;
+        await processLogs(args, s3Client, resultCallback);
+    } catch (err) {
+        console.log("handleProcessLogs Err", JSON.stringify(err));
+        resultCallback(err);
+    }
 }
 
-function processLogs(args, s3, resultCallback) {
+async function processLogs(args, s3Client, resultCallback) {
     "use strict";
-    console.log("Processing '" + args.records.length + "' records.");
-    async.map(args.records, function(record, callback) {
-            return getMessages(args.logFormat, record, callback);
-        },
-        function done(err, results) {
-            if (err) { return resultCallback(err); }
-            var data = "";
-            for (var i = 0; i < results.length; i++) {
-                data += results[i]; 
-            }
-            var objectName = getObjectName(args.awsRegion, args.s3LogFilePrefix, args.logFormat);
-            return uploadData(data, args.awsRegion, args.s3BucketName, objectName, s3, resultCallback);
+    console.log("Processing '" + args.records.length + "' records.",JSON.stringify(args.records));
+
+    const getMessagePromises = args.records.map(record => getMessages(args.logFormat, record));
+
+    try {
+        const results = await Promise.all(getMessagePromises);
+        let data = "";
+        for (let i = 0; i < results.length; i++) {
+            data += results[i];
         }
-    ); 
+        const objectName = getObjectName(args.awsRegion, args.s3LogFilePrefix, args.logFormat);
+        await uploadData(data, args.awsRegion, args.s3BucketName, objectName, s3Client);
+        resultCallback(null);
+    } catch (err) {
+        resultCallback(err);
+    }
 }
 
-function getMessages(logFormat, record, callback) {
+async function getMessages(logFormat, record) {
     "use strict";
-    zlib.gunzip(new Buffer(record.kinesis.data, 'base64'), function(err, result) {
-        if (err) {
-            console.log("Failed to uncompress data. Record: '" + JSON.stringify(record) +
-                        "'. Error: " + JSON.stringify(err));
-            return callback();
-        }
+    try {
+        const result = await gunzip(Buffer.from(record.kinesis.data, 'base64'));
 
-        var data = JSON.parse(result.toString('ascii'));
+        const data = JSON.parse(result.toString('ascii'));
         if (!data.hasOwnProperty("messageType") || data.messageType !== "DATA_MESSAGE") {
             console.log("Invalid message received. Skip processing. messageType: " + result.messageType);
-            return callback();
+            return "";
         }
 
-        var logEvents   = data.logEvents,
-            logs        = "";
+        const logEvents = data.logEvents;
+        let logs = "";
 
         switch(logFormat) {
             case "AWS VPC Flow Logs":
                 logEvents.forEach(function (log) {
-                    // Get the timestamp for the beginning of the captured window
-                    var timestamp = log.message.split(' ')[10];
-                    logs = logs + "VPC Flow Log Record: " + timestamp + " " + log.message + "\n";
+                    const timestamp = log.message.split(' ')[10];
+                    logs += "VPC Flow Log Record: " + timestamp + " " + log.message + "\n";
                 });
                 break;
             case "AWS Lambda":
                 logEvents.forEach(function (log) {
-                    // Get the timestamp for the beginning of the captured window
-                    var date = new Date(log.timestamp);
-                    logs = logs + "Lambda Log Record: [" + date.toISOString() + "] - " + log.message + "\n\n";
+                    const date = new Date(log.timestamp);
+                    logs += "Lambda Log Record: [" + date.toISOString() + "] - " + log.message + "\n\n";
                 });
                 break;
             case "AWS IoT":
                 logEvents.forEach(function (log) {
-                    logs = logs + "IoT Log Record: " + log.message + "\n";
+                    logs += "IoT Log Record: " + log.message + "\n";
                 });
                 break;
             default:
                 logEvents.forEach(function (log) {
-                    // Get the timestamp for the beginning of the captured window
-                    var date = new Date(log.timestamp);
-                    logs = logs + "Custom CloudWatch Log Record: [" + date.toISOString() + "] - " + log.message + "\n\n";
+                    const date = new Date(log.timestamp);
+                    logs += "Custom CloudWatch Log Record: [" + date.toISOString() + "] - " + log.message + "\n\n";
                 });
                 break;
         }
-        return callback(null, logs);
-    });
+        return logs;
+    } catch (err) {
+        console.log("Failed to uncompress data. Record: '" + JSON.stringify(record) +
+                    "'. Error: " + JSON.stringify(err));
+        return "";
+    }
 }
 
-function uploadData(data, awsRegion, s3BucketName, objectName, s3, callback) {
+async function uploadData(data, awsRegion, s3BucketName, objectName, s3Client) {
     "use strict";
-    if (!data || !data.length) { return callback(); }
+    if (!data || !data.length) { return; }
 
     console.log("Uploading data. Region: %s, BucketName: %s, ObjectName: %s",
         awsRegion, s3BucketName, objectName);
-    zlib.gzip(data, function (err, compressedData) {
-        if (err) {
-            console.log("Failed to compress data. LogGroup: '" + data.logGroup +
-                        "'. Error: " + JSON.stringify(err));
-            return callback();
-        }
-        
-        var params = {
-                "Bucket": s3BucketName,
-                "Key": objectName,
-                "Body": new Buffer(compressedData, 'base64'),
-                "ContentType": "application/json",
-                "ContentEncoding": "gzip" 
-            };
-        s3.putObject(params, function(err, _result) {
-            if (err) {
-                console.log("Failed to persist '" + objectName + "' object to '" + s3BucketName + "' bucket. " +
-                            "Error: " + JSON.stringify(err));
-            } else {
-                console.log("Successfully persisted '" + getObjectUrl(objectName, s3BucketName) + "'.");
-            }
-            return callback(err);
-        });
-    });
+
+    try {
+        const compressedData = await gzip(data);
+
+        const params = {
+            Bucket: s3BucketName,
+            Key: objectName,
+            Body: compressedData,
+            ContentType: "application/json",
+            ContentEncoding: "gzip"
+        };
+
+        await s3Client.send(new PutObjectCommand(params));
+        console.log("Successfully persisted '" + getObjectUrl(objectName, s3BucketName) + "'.");
+    } catch (err) {
+        console.log("Failed to persist '" + objectName + "' object to '" + s3BucketName + "' bucket. " +
+                    "Error: " + JSON.stringify(err));
+        throw err;
+    }
 }
 
 function getObjectName(awsRegion, s3LogFilePrefix, logFormat) {
     "use strict";
-    var now = new Date(),
-        time_string = now.getFullYear() + '-' +
-            ("0" + (now.getMonth() + 1)).slice(-2) + '-' +
-            ("0" + (now.getDate() + 1)).slice(-2) + '-' +
-            ("0" + (now.getHours() + 1)).slice(-2) + '-' +
-            ("0" + (now.getMinutes() + 1)).slice(-2) + '-' +
-            ("0" + (now.getSeconds() + 1)).slice(-2),
-        suffix = (Math.random().toString(36) + '0000000000000000').slice(2, 18),
-        prefix = s3LogFilePrefix === "" ? "" : s3LogFilePrefix;
-    return prefix + time_string + "-" + suffix + ".json.gz";
+    const now = new Date();
+    const timeString = now.getFullYear() + '-' +
+        ("0" + (now.getMonth() + 1)).slice(-2) + '-' +
+        ("0" + (now.getDate() + 1)).slice(-2) + '-' +
+        ("0" + (now.getHours() + 1)).slice(-2) + '-' +
+        ("0" + (now.getMinutes() + 1)).slice(-2) + '-' +
+        ("0" + (now.getSeconds() + 1)).slice(-2);
+    const suffix = (Math.random().toString(36) + '0000000000000000').slice(2, 18);
+    const prefix = s3LogFilePrefix === "" ? "" : s3LogFilePrefix;
+    return `${prefix}${timeString}-${suffix}.json.gz`;
 }
 
 function getS3Endpoint(region) {
     "use strict";
     if (!region || region === 'us-east-1' || region === '') {
-            return 's3.amazonaws.com';
+        return 's3.amazonaws.com';
     }
-    return 's3-' + region + '.amazonaws.com';
+    return `s3-${region}.amazonaws.com`;
 }
 
 function getObjectUrl(objectName, s3BucketName) {
     "use strict";
-    return "https://s3.amazonaws.com/" + s3BucketName + "/" + objectName;
+    return `https://s3.amazonaws.com/${s3BucketName}/${objectName}`;
 }

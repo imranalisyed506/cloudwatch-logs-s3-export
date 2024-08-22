@@ -53,7 +53,7 @@
         "LambdaPackageName": {
             "Description": "Object name containing Lambda package to be used for archiving CloudWath Logs to S3.",
             "Type": "String",
-            "Default": "cloudwatch-logs-s3-export-0.0.12.zip",
+            "Default": "cloudwatch-logs-s3-export-0.0.13.zip",
             "MinLength": "5"
         },
         "AlertLogicAWSAccountId": {
@@ -224,7 +224,7 @@
                             [
                                 "'use strict';\n",
                                 "\n",
-                                "const AWS = require('aws-sdk');\n",
+                                "const { CloudWatchLogsClient, DescribeSubscriptionFiltersCommand } = require('@aws-sdk/client-cloudwatch-logs');\n",
                                 "const response = require('./cfn-response');\n",
                                 "\n",
                                 "function hasKinesisArn(subscriber) {\n",
@@ -262,31 +262,32 @@
                                 "    return responseData;\n",
                                 "}\n",
                                 "\n",
-                                "exports.handler = function (event, context) {\n",
+                                "exports.handler = async function (event, context) {\n",
                                 "    console.log('REQUEST RECEIVED:\\n', JSON.stringify(event));\n",
                                 "    if (event.RequestType !== 'Create') {\n",
                                 "        return response.send(event, context, response.SUCCESS);\n",
                                 "    }\n",
                                 "    const awsRegion = event.ResourceProperties.Region;\n",
                                 "    const logGroup = event.ResourceProperties.LogGroup;\n",
-                                "    AWS.config.update({ region: awsRegion });\n",
-                                "    const cloudWatchLogs = new AWS.CloudWatchLogs({ apiVersion: '2014-03-28' });\n",
-                                "    cloudWatchLogs.describeSubscriptionFilters({ logGroupName: logGroup }, function (err, data) {\n",
-                                "        if (err) {\n",
-                                "            const responseData = { Error: 'DescribeSubscriptionFilters call failed' };\n",
-                                "            console.log(responseData.Error + ':\\n', err);\n",
-                                "            return response.send(event, context, response.FAILED, responseData);\n",
-                                "        }\n",
+                                "    const client = new CloudWatchLogsClient({ region: awsRegion });\n",
+                                "    const params = { logGroupName: logGroup };\n",
+                                "    try {\n",
+                                "        const command = new DescribeSubscriptionFiltersCommand(params);\n",
+                                "        const data = await client.send(command);\n",
                                 "        const responseData = resolveSubscriber(data);\n",
                                 "        const responseStatus = responseData.Error ? response.FAILED : response.SUCCESS;\n",
                                 "        return response.send(event, context, responseStatus, responseData);\n",
-                                "    });\n",
-                                "}\n"
+                                "    } catch (err) {\n",
+                                "        const responseData = { Error: 'DescribeSubscriptionFilters call failed' };\n",
+                                "        console.log(responseData.Error + ':\\n', err);\n",
+                                "        return response.send(event, context, response.FAILED, responseData);\n",
+                                "    }\n",
+                                "};\n"
                             ]
                         ]
                     }
                 },
-                "Runtime": "nodejs14.x",
+                "Runtime": "nodejs20.x",
                 "Timeout": "180"
             },
             "DependsOn": [
