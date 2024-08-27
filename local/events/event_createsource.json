@@ -1,0 +1,27 @@
+{
+  "operation": "createSource",
+  "data": {
+    "s3": {
+      "bucket": "im-s3-auditlogs/imcwetos3exporttest2-StackCreateCloudWatchLogExport-1M7H301B9FWRQ",
+      "file_pattern": ".*",
+      "max_collection_interval": "300",
+      "time_zone": "GMT",
+      "enabled": "true"
+    },
+    "logFormat": "AWS Lambda",
+    "auth": "c62b8b60fea828517e9dfcf77856219aaa7d9cc47b756a910f:",
+    "credentials": {
+      "externalId": "imcwetos3exporttest2-StackCreateCloudWatchLogExport-1M7H301B9FWRQ:352283894009:us-east-1",
+      "type": "iam_role",
+      "arn": "arn:aws:iam::352283894009:role/imcwetos3exporttest2-StackCr-AlertLogicS3AccessRole-IjnFpUofkd4O"
+    },
+    "customerId": "",
+    "name": "imcwetos3exporttest2-StackCreateCloudWatchLogExport-1M7H301B9FWRQ-352283894009-us-east-1",
+    "type": "s3",
+    "policy": {
+      "default": "false",
+      "multiline": {"is_multiline": "false"},
+      "timestamp": {"format": ""}
+    }
+  }
+}

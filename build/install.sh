@@ -33,7 +33,7 @@ fi
 
 # Find Lambda installation so we can make sure we are at it's root.
 OZONE_DIR=`find $BASE_DIR -name cloudwatch-logs-s3-export | grep -v .Trash`
-if [ -z $OZONE_DIR ]
+if [ -z "$OZONE_DIR" ]
     then
         echo -e "${red}Lambda not found, can not continue.${NC}"
         exit 1

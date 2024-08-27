@@ -1,0 +1,27 @@
+{
+    "operation": "processLogs",
+    "data": {
+        "awsRegion": "us-east-1",
+        "s3BucketName": "im-s3-auditlogs",
+        "s3LogFilePrefix": "imcwetos3exporttest2-StackCreateCloudWatchLogExport-1M7H301B9FWRQ/",
+        "logFormat": "AWS Lambda",
+        "records": [
+            {
+                "kinesis": {
+                    "kinesisSchemaVersion": "1.0",
+                    "partitionKey": "e1280f37492f8ce31f40ba7accc6e5ca",
+                    "sequenceNumber": "49654863737818064577258412037702257755616412283873263650",
+                    "data": "H4sIAAAAAAAA/61S207bQBD9FWvVx5jM7uzVb0kIFDXhEqcgilHl2Ovg1pfU3hAo4t+rmIsiUaQi9XXOzJlzZs4DKW3bxks7v19ZEpD9wXzwfToOw8HhmPRIvalsQwKCgjGN2nAATXqkqJeHTb1ekYD0403bL+Jykcb9vPRbTOqisImrG7+qU0u1s62j/uipOukaD9ZV4vK68o8v7+locmKW+svlE23oGhuXJCAMGO+D7lPev/o0GczH4fwaqWYZT9BoQI6YxCkkGWS40BkYqRTpkXa9aJMmX23pD/LC2aYlwRXJy2RjXd2ivVvVjdtqYn7o4uTnqLGxs6OiXqcXsUtuJvVy3PX4dKo+I9ChObiYnfmnaxe+4fYn7fmPm3SIJ5vDmFx3Dsa3tnLbpQ8kT7en0xyVoVIaBGkk14YZxakxSlFGGUipQCGAEEoCk0ILIZGiJD3i8tK2Li5XJKCKoaRCGck09l6eRgISzgezuTezv9a2dUdp4CEkGc905jNrtc9TCb6OberbTKBZLJSAdOGd26bN6yrwnk8bVeSx90awZoxSRkGBBCYUlUJpKjhVxqDRCrkSyLlUgIYhvidYUL4r+CEihb21RUSCiORVVkekF73gXXEwCREAKIA3qeM0r5ZeiN5rrrr+103dxDYsPmif8jnIAEwg5J6g+C0ij39zpijfuhIClTLcANNcADNSMGWM4EoyxhRyJrgxSsB7r1AM6a6z8fH+Rx/xH9Spf1Q3G5+efDwpkdtfN7HrsmK42tPaK9vIDfOisKm3iz0BU1vWzb0X5r9t4AnKvOkwctP4znsGvrY2DTzKeAccVbnbJQG6B7zj2R7m+vEPuBR1OZ4EAAA=",
+                    "approximateArrivalTimestamp": 1723615805.413
+                },
+                "eventSource": "aws:kinesis",
+                "eventVersion": "1.0",
+                "eventID": "shardId-000000000002:49654863737818064577258412037702257755616412283873263650",
+                "eventName": "aws:kinesis:record",
+                "invokeIdentityArn": "arn:aws:iam::352283894009:role/imcwetos3exporttest2-Stac-LambdaDriverExecutionRole-Jb2l0h7VUr92",
+                "awsRegion": "us-east-1",
+                "eventSourceARN": "arn:aws:kinesis:us-east-1:352283894009:stream/imcwetos3exporttest2-StackCreateCloudWatchLogExport-1M7H301B9FWRQ-KinesisSubscriptionStream-5zbsuQsYu3ZY"
+            }
+        ]
+    }
+}
